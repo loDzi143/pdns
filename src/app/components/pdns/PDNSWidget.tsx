@@ -470,7 +470,7 @@ interface RecordRowProps {
 
 interface TimePointRowProps { time: string; count: number; segs: TreeSeg[]; }
 
-const TimePointRow: React.FC<TimePointRowProps> = ({ time, count, segs }) => {
+const SourceRow: React.FC<{ source: string; count: number; segs: TreeSeg[] }> = ({ source, count, segs }) => {
   const T = useT();
   const [hovered, setHovered] = useState(false);
   return (
@@ -479,29 +479,98 @@ const TimePointRow: React.FC<TimePointRowProps> = ({ time, count, segs }) => {
       style={{
         gridTemplateColumns: 'minmax(240px,1fr) 96px 72px 138px 130px 116px',
         background: hovered ? T.hov : 'transparent',
-        borderColor: T.bd1 + '35',
+        borderColor: T.bd1 + '25',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* FQDN + время (под раскрываемым ресурсом) */}
       <div className="flex items-stretch min-w-0" style={{ alignSelf: 'stretch', paddingLeft: '12px' }}>
         <TreeLines segs={segs} />
-        <div className="py-1.5 px-1 text-xs" style={{ color: T.tx2 }}>{time}</div>
+        <div className="py-1.5 px-1 text-xs" style={{ color: T.tx2 }}>{source}</div>
       </div>
 
-      {/* Резолвов */}
       <div className="px-3 py-1.5 text-right">
         <span className="text-xs tabular-nums" style={{ color: T.tx3 }}>
           {count.toLocaleString('ru-RU')}
         </span>
       </div>
 
-      {/* Тип – empty */}
-      <div />
-
-      <div /><div /><div />
+      <div /><div /><div /><div />
     </div>
+  );
+};
+
+const TimePointRow: React.FC<TimePointRowProps> = ({ time, count, segs }) => {
+  const T = useT();
+  const [hovered, setHovered] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const srcPropSegs = propagateSegs(segs);
+
+  const getSourceBreakdown = (t: string, total: number) => {
+    // Deterministic: some time points have only pDNS, others split between pDNS and OctoResolver
+    const seed = t.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    const hasBoth = seed % 3 !== 0 && total > 1;
+    if (!hasBoth) {
+      return [{ source: 'pDNS', count: total }];
+    }
+    const p = Math.max(1, Math.floor(total * (0.55 + ((seed % 5) - 2) * 0.05)));
+    const o = total - p;
+    return [
+      { source: 'pDNS', count: p },
+      { source: 'OctoResolver', count: Math.max(1, o) }
+    ];
+  };
+
+  const sources = getSourceBreakdown(time, count);
+
+  return (
+    <>
+      <div
+        className="grid items-center border-b transition-colors"
+        style={{
+          gridTemplateColumns: 'minmax(240px,1fr) 96px 72px 138px 130px 116px',
+          background: hovered ? T.hov : 'transparent',
+          borderColor: T.bd1 + '35',
+        }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        {/* Время + chevron */}
+        <div className="flex items-stretch min-w-0" style={{ alignSelf: 'stretch', paddingLeft: '12px' }}>
+          <TreeLines segs={segs} />
+          <div className="flex items-center py-1.5 flex-1 min-w-0">
+            <button
+              className="w-5 h-5 flex items-center justify-center flex-shrink-0 mr-1 rounded transition-colors hover:opacity-70"
+              style={{ color: T.tx4 }}
+              onClick={e => { e.stopPropagation(); setIsOpen(v => !v); }}
+            >
+              {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+            </button>
+            <span className="text-xs" style={{ color: T.tx2 }}>{time}</span>
+          </div>
+        </div>
+
+        {/* Резолвов */}
+        <div className="px-3 py-1.5 text-right">
+          <span className="text-xs tabular-nums" style={{ color: T.tx3 }}>
+            {count.toLocaleString('ru-RU')}
+          </span>
+        </div>
+
+        <div /><div /><div /><div />
+      </div>
+
+      {/* Expanded source rows */}
+      {isOpen && sources.map((s, idx) => (
+        <SourceRow
+          key={idx}
+          source={s.source}
+          count={s.count}
+          segs={[...srcPropSegs, idx === sources.length - 1 ? 'last' : 'branch']}
+        />
+      ))}
+    </>
   );
 };
 
